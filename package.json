@@ -1,13 +1,16 @@
 {
-  "name": "argon2-browser",
-  "version": "1.5.3",
+  "name": "@jj/argon2-browser",
+  "version": "1.0.0",
   "description": "Argon2 library compiled for browser runtime",
-  "main": "lib/argon2.js",
+  "main": "lib/argon2-browser.js",
+  "typings": "lib/argon2-browser.d.ts",
   "directories": {
     "doc": "docs",
     "lib": "lib"
   },
   "scripts": {
+    "tsc": "tsc",
+    "postinstall": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -19,5 +22,8 @@
   "bugs": {
     "url": "https://github.com/antelle/argon2-browser/issues"
   },
-  "homepage": "https://github.com/antelle/argon2-browser#readme"
+  "homepage": "https://github.com/antelle/argon2-browser#readme",
+  "dependencies": {
+    "typescript": "^3.4.5"
+  }
 }

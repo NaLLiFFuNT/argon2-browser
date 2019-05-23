@@ -3,23 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <title>Argon2 in browser</title>
-    <script src="../lib/argon2.js"></script>
+    <script type="module" src="../lib/argon2-browser.js"></script>
 </head>
 <body>
-<script>
-    function run() {
+<script type="module">
+    import {Argon2} from '../lib/argon2-browser.js';
+
+
+    window.run = function run () {
         const pass = new TextEncoder().encode('password');
         const salt = 'somesalt';
         const distPath = 'dist';
-        argon2.hash({ pass, salt, distPath })
-            .then(({ hash, hashHex, encoded }) => {
+        Argon2.hash({pass, salt, distPath, result: ['hash', 'hashHex', 'encoded']})
+            .then(({hash, hashHex, encoded}) => {
                 console.log('Hash', hash, hashHex, encoded);
-                argon2.verify({ pass, encoded, distPath })
+                Argon2.verify({pass, encoded, distPath})
                     .then(() => console.log('Verified ok'))
-                    .catch(({ message, code }) => console.error(message, code));
+                    .catch(({message, code}) => console.error(message, code));
             })
-            .catch(({ message, code }) => console.error(message, code));
-    }
+            .catch(({message, code}) => console.error(message, code));
+    };
+    // autorun faster
+    run();
 </script>
 <button onclick="run()">Run</button>
 </body>

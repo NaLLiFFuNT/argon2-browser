@@ -1,43 +1,48 @@
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define([], function () {
-            return (root.argon2 = factory());
-        });
-    } else {
-        root.argon2 = factory();
+export namespace Argon2 {
+    interface ArgonModule {
+        ALLOC_NORMAL: number;
+        _argon2_verify: CallableFunction;
+        _argon2_hash: CallableFunction;
+        _free (descriptor: number): void;
+        _argon2_error_message (res: number): number;
+        allocate (value: any, typeSize: 'i8', allocator: number): number
+        intArrayFromString (str: string): number
+        Pointer_stringify (res: number): string;
+        HEAP8: Int8Array;
     }
-}(this, function () {
-    'use strict';
 
-    var defaultDistPath = '/node_modules/argon2-browser/dist';
+    declare const Module: ArgonModule;
+    declare const importScripts: CallableFunction | undefined;
+
+    const defaultDistPath = '/node_modules/argon2-browser/assets';
 
     /**
      * @enum
      */
-    var ArgonType = {
-        Argon2d: 0,
-        Argon2i: 1,
-        Argon2id: 2
-    };
+    export enum ArgonType {
+        Argon2d = 0,
+        Argon2i = 1,
+        Argon2id = 2
+    }
 
     var scriptLoadedPromise;
 
-    function loadScript(src) {
-        return new Promise(function(resolve, reject) {
+    function loadScript (src) {
+        return new Promise(function (resolve, reject) {
             if (typeof importScripts === 'function') {
                 importScripts(src);
                 resolve();
             } else {
-                var el = document.createElement("script");
+                var el = document.createElement('script');
                 el.src = src;
-                el.onload = function() { resolve(); };
-                el.onerror = function() { reject('Error loading script'); };
+                el.onload = function () { resolve(); };
+                el.onerror = function () { reject('Error loading script'); };
                 document.body.appendChild(el);
             }
         });
     }
 
-    function allocateArray(strOrArr) {
+    function allocateArray (strOrArr) {
         var arr = strOrArr instanceof Uint8Array || strOrArr instanceof Array ? strOrArr
             : Module.intArrayFromString(strOrArr);
         return Module.allocate(arr, 'i8', Module.ALLOC_NORMAL);
@@ -45,33 +50,33 @@
 
     /**
      * Argon2 hash
-     * @param {string|Uint8Array} params.pass - password string
-     * @param {string|Uint8Array} params.salt - salt string
-     * @param {number} [params.time=1] - the number of iterations
-     * @param {number} [params.mem=1024] - used memory, in KiB
-     * @param {number} [params.hashLen=24] - desired hash length
-     * @param {number} [params.parallelism=1] - desired parallelism
-     * @param {number} [params.type=argon2.ArgonType.Argon2d] - hash type:
-     *      argon2.ArgonType.Argon2d
-     *      argon2.ArgonType.Argon2i
-     *      argon2.ArgonType.Argon2id
-     * @param {number} [params.distPath=.] - asm.js script location, without trailing slash
-     *
-     * @return Promise
-     *
      * @example
-     *  argon2.hash({ pass: 'password', salt: 'somesalt' })
+     *  argon2.hash({ pass: 'password', salt: 'somesalt', result: [hash' , 'hashHex' , 'encoded'] })
      *      .then(h => console.log(h.hash, h.hashHex, h.encoded))
      *      .catch(e => console.error(e.message, e.code))
      */
-    function argon2Hash(params) {
+    export function hash (params: {
+        pass: Uint8Array | string // password
+        salt: Uint8Array | string // salt
+        memKb: number // used memory, in KiB
+        iterations?: number // the number of iterations
+        hashLen?: number // desired hash length
+        type?: ArgonType; // Argon2d default
+        distPath?: string; // asm.js script location, without trailing slash
+        parallelism?: 1 // desired parallelism. Disabled to wasm complaint
+        result?: Array<'hash' | 'hashHex' | 'encoded'> // field you get in result
+    }): Promise<{
+        hash?: Uint8Array;
+        hashHex?: string;
+        encoded?: string;
+    }> {
         if (!scriptLoadedPromise) {
             var distPath = params.distPath || defaultDistPath;
             scriptLoadedPromise = loadScript(distPath + '/argon2-asm.min.js');
         }
-        return scriptLoadedPromise.then(function() {
-            var tCost = params.time || 1;
-            var mCost = params.mem || 1024;
+        return scriptLoadedPromise.then(function () {
+            var tCost = params.iterations || 1;
+            var mCost = params.memKb || 1024;
             var parallelism = params.parallelism || 1;
             var pwd = allocateArray(params.pass);
             var pwdlen = params.pass.length;
@@ -84,9 +89,13 @@
             var argon2Type = params.type || ArgonType.Argon2d;
             var version = 0x13;
             var err;
+            var hashNeeded = params.result ? params.result.includes('hash') : true;
+            var hexNeeded = params.result ? params.result.includes('hashHex') : false;
+            var encodedNeeded = params.result ? params.result.includes('encoded') : false;
             try {
                 var res = Module._argon2_hash(tCost, mCost, parallelism, pwd, pwdlen, salt, saltlen,
-                    hash, hashlen, encoded, encodedlen, argon2Type, version);
+                    hash, hashlen, encoded, encodedlen, argon2Type, version
+                );
             } catch (e) {
                 err = e;
             }
@@ -97,18 +106,29 @@
                 for (var i = 0; i < hashlen; i++) {
                     var byte = Module.HEAP8[hash + i];
                     hashArr[i] = byte;
-                    hashStr += ('0' + (0xFF & byte).toString(16)).slice(-2);
+                    if (hexNeeded) {
+                        hashStr += ('0' + (0xFF & byte).toString(16)).slice(-2);
+                    }
                 }
-                var encodedStr = Module.Pointer_stringify(encoded);
-                result = { hash: hashArr, hashHex: hashStr, encoded: encodedStr };
+
+                result = {hash: hashArr};
+                if (hashNeeded) {
+                    result.hash = hashArr;
+                }
+                if (hexNeeded) {
+                    result.hashHex = hashStr;
+                }
+                if (encodedNeeded) {
+                    result.encoded = Module.Pointer_stringify(encoded);
+                }
             } else {
                 try {
                     if (!err) {
-                        err = Module.Pointer_stringify(Module._argon2_error_message(res))
+                        err = Module.Pointer_stringify(Module._argon2_error_message(res));
                     }
                 } catch (e) {
                 }
-                result = { message: err, code: res };
+                result = {message: err, code: res};
             }
             try {
                 Module._free(pwd);
@@ -126,26 +146,22 @@
 
     /**
      * Argon2 verify function
-     * @param {string} params.pass - password string
-     * @param {string|Uint8Array} params.encoded - encoded hash
-     * @param {number} [params.type=argon2.ArgonType.Argon2d] - hash type:
-     *      argon2.ArgonType.Argon2d
-     *      argon2.ArgonType.Argon2i
-     *      argon2.ArgonType.Argon2id
-     *
-     * @returns Promise
-     *
      * @example
      *  argon2.verify({ pass: 'password', encoded: 'encoded-hash' })
      *      .then(() => console.log('OK'))
      *      .catch(e => console.error(e.message, e.code))
      */
-    function argon2Verify(params) {
+    export function verify (params: {
+        pass: Uint8Array | string // password
+        encoded: string
+        type?: ArgonType; // may be omitted & get from encoded string Argon2d default
+        distPath?: string; // asm.js script location, without trailing slash
+    }): Promise<void> {
         if (!scriptLoadedPromise) {
             var distPath = params.distPath || defaultDistPath;
             scriptLoadedPromise = loadScript(distPath + '/argon2-asm.min.js');
         }
-        return scriptLoadedPromise.then(function() {
+        return scriptLoadedPromise.then(function () {
             var pwd = allocateArray(params.pass);
             var pwdlen = params.pass.length;
             var enc = allocateArray(params.encoded);
@@ -167,11 +183,11 @@
             if (res || err) {
                 try {
                     if (!err) {
-                        err = Module.Pointer_stringify(Module._argon2_error_message(res))
+                        err = Module.Pointer_stringify(Module._argon2_error_message(res));
                     }
                 } catch (e) {
                 }
-                result = { message: err, code: res };
+                result = {message: err, code: res};
             }
             try {
                 Module._free(pwd);
@@ -184,11 +200,4 @@
             }
         });
     }
-
-    return {
-        ArgonType: ArgonType,
-        hash: argon2Hash,
-        verify: argon2Verify
-    };
-}));
-
+}

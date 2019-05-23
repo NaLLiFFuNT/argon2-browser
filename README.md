@@ -177,4 +177,7 @@ Prerequesties:
 
 ## License
 
+## Usage with angular
+// TODO: describe
+
 [MIT](https://opensource.org/licenses/MIT)
